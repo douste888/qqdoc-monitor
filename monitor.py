@@ -57,11 +57,18 @@ def make_hash(data):
 def main():
     FLAG.unlink(missing_ok=True)
     payload = {}
+
     for doc in DOCS:
-        data = fetch_doc(doc)
-        if doc["type"] == "json":
-            data = find_sheet_payload(data)
-        payload[doc["name"]] = data
+        try:
+            data = fetch_doc(doc)
+            if doc["type"] == "json":
+                data = find_sheet_payload(data)
+            payload[doc["name"]] = data
+        except Exception as e:
+            print(f"skip {doc['name']}: {e}")
+
+    if not payload:
+        raise RuntimeError("all documents unavailable")
 
     h = make_hash(payload)
     old = json.loads(SNAPSHOT.read_text()) if SNAPSHOT.exists() else None
