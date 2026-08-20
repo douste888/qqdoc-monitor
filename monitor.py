@@ -13,6 +13,11 @@ DOCS = [
         "name": "金山文档",
         "type": "html",
         "url": "https://www.kdocs.cn/l/caTKn3Dbrl3G"
+    },
+    {
+        "name": "短线统计",
+        "type": "json",
+        "url": "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DUWRMdkpYY1pIT3J5&tab=0r6mhc"
     }
 ]
 
