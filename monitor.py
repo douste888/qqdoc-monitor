@@ -13,68 +13,54 @@ def fetch():
         return json.loads(r.read().decode("utf-8"))
 
 
-def normalize_value(v):
+def save_debug(data):
+    DEBUG.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def normalize(v):
     if isinstance(v, (dict, list)):
         return json.dumps(v, ensure_ascii=False, sort_keys=True)
     return v
 
 
-def find_cell_data(obj):
-    """Try to extract real spreadsheet cells and ignore metadata."""
+def extract_possible_sheet_data(raw):
+    """Extract Tencent sheet related payload. The workbook field is compressed and
+    may need a decoder, so keep useful intermediate data for analysis."""
     result = {}
 
     def walk(x, path=""):
         if isinstance(x, dict):
-            # common formats
-            if "row" in x and "col" in x:
-                value = x.get("value", x.get("text", x.get("v")))
-                result[f"{x['row']},{x['col']}"] = normalize_value(value)
-                return
-            if "r" in x and "c" in x and "v" in x:
-                result[f"{x['r']},{x['c']}"] = normalize_value(x["v"])
-                return
-
             for k, v in x.items():
-                if k in {
-                    "serverTimestamp", "cacheTime", "rev", "revision",
-                    "permission", "permissions", "onlineUsers"
-                }:
-                    continue
-                walk(v, path + "/" + str(k))
-
+                p = path + "/" + str(k)
+                if k in ("workbook", "related_sheet", "initialAttributedText"):
+                    result[p] = normalize(v)
+                walk(v, p)
         elif isinstance(x, list):
             for i, v in enumerate(x):
                 walk(v, path + f"/{i}")
 
-    walk(obj)
+    walk(raw)
 
-    if not result:
-        DEBUG.write_text(json.dumps(obj, ensure_ascii=False, indent=2))
-        return {"parse_status": "no_cells_found"}
+    # Current Tencent public API stores sheet content in workbook blobs.
+    # Save the discovered structure until a proper decoder is applied.
+    if result:
+        save_debug(result)
 
     return result
 
 
 def stable_hash(data):
-    text = json.dumps(data, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def diff_cells(old, new):
-    changes = []
-    keys = set(old) | set(new)
-    for k in sorted(keys):
-        if old.get(k) != new.get(k):
-            changes.append({"cell": k, "old": old.get(k), "new": new.get(k)})
-    return changes
+    return hashlib.sha256(
+        json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
 
 def main():
     raw = fetch()
-    cells = find_cell_data(raw)
+    cells = extract_possible_sheet_data(raw)
 
-    if cells.get("parse_status") == "no_cells_found":
-        print("no cells parsed")
+    if not cells:
+        print("no sheet payload found")
         return
 
     current_hash = stable_hash(cells)
@@ -86,13 +72,10 @@ def main():
         return
 
     if old.get("hash") != current_hash:
-        changes = diff_cells(old.get("cells", {}), cells)
         SNAPSHOT.write_text(json.dumps({"hash": current_hash, "cells": cells}, ensure_ascii=False, indent=2))
-        print("cell content changed")
-        for c in changes[:20]:
-            print(c)
+        print("sheet payload changed")
     else:
-        print("no cell change")
+        print("no change")
 
 
 if __name__ == "__main__":
