@@ -10,7 +10,7 @@ DOCS = [
         "url": "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"
     },
     {
-        "name": "金山文档",
+        "name": "懒懒单",
         "type": "html",
         "url": "https://www.kdocs.cn/l/caTKn3Dbrl3G"
     },
