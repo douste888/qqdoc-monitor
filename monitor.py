@@ -6,6 +6,7 @@ from pathlib import Path
 URL = "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"
 SNAPSHOT = Path("snapshot.json")
 FLAG = Path("document_changed.flag")
+TEST_TRIGGER = True
 
 
 def fetch():
@@ -48,7 +49,7 @@ def main():
     if old is None:
         SNAPSHOT.write_text(json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2))
         print("baseline created")
-    elif old.get("hash") != h:
+    elif old.get("hash") != h or TEST_TRIGGER:
         SNAPSHOT.write_text(json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2))
         FLAG.write_text("document changed")
         print("document changed")
