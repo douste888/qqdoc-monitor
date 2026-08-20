@@ -3,15 +3,32 @@ import urllib.request
 import hashlib
 from pathlib import Path
 
-URL = "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"
+DOCS = [
+    {
+        "name": "腾讯文档",
+        "type": "json",
+        "url": "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"
+    },
+    {
+        "name": "金山文档",
+        "type": "html",
+        "url": "https://www.kdocs.cn/l/caTKn3Dbrl3G"
+    }
+]
+
 SNAPSHOT = Path("snapshot.json")
 FLAG = Path("document_changed.flag")
-TEST_TRIGGER = True
 
 
-def fetch():
-    with urllib.request.urlopen(URL, timeout=20) as r:
-        return json.loads(r.read().decode("utf-8"))
+def fetch_doc(doc):
+    req = urllib.request.Request(doc["url"], headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        raw = r.read()
+
+    if doc["type"] == "json":
+        return json.loads(raw.decode("utf-8"))
+
+    return raw.decode("utf-8", errors="ignore")
 
 
 def find_sheet_payload(data):
@@ -38,10 +55,13 @@ def make_hash(data):
 
 def main():
     FLAG.unlink(missing_ok=True)
-    payload = find_sheet_payload(fetch())
-    if not payload:
-        print("no payload")
-        return
+
+    payload = {}
+    for doc in DOCS:
+        data = fetch_doc(doc)
+        if doc["type"] == "json":
+            data = find_sheet_payload(data)
+        payload[doc["name"]] = data
 
     h = make_hash(payload)
     old = json.loads(SNAPSHOT.read_text()) if SNAPSHOT.exists() else None
@@ -49,7 +69,7 @@ def main():
     if old is None:
         SNAPSHOT.write_text(json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2))
         print("baseline created")
-    elif old.get("hash") != h or TEST_TRIGGER:
+    elif old.get("hash") != h:
         SNAPSHOT.write_text(json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2))
         FLAG.write_text("document changed")
         print("document changed")
