@@ -6,29 +6,37 @@ from pathlib import Path
 URL = "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"
 SNAPSHOT = Path("snapshot.json")
 
-IGNORE_KEYS = {
-    "serverTimestamp", "rev", "cacheTime", "userInfo", "permission",
-    "permissions", "onlineUsers", "creator", "createdTime", "updatedTime"
-}
-
 
 def fetch():
     with urllib.request.urlopen(URL, timeout=20) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
-def clean(obj):
-    """Remove changing metadata and keep meaningful document data."""
-    if isinstance(obj, dict):
-        result = {}
-        for k, v in obj.items():
-            if k in IGNORE_KEYS:
-                continue
-            result[k] = clean(v)
-        return result
-    if isinstance(obj, list):
-        return [clean(x) for x in obj]
-    return obj
+def find_cell_data(obj):
+    """Extract spreadsheet content and ignore Tencent metadata."""
+    result = {}
+
+    def walk(x, path=""):
+        if isinstance(x, dict):
+            # common cell structures
+            if "row" in x and "col" in x and ("value" in x or "text" in x):
+                result[f"{x['row']},{x['col']}"] = x.get("value", x.get("text"))
+            elif "r" in x and "c" in x and "v" in x:
+                result[f"{x['r']},{x['c']}"] = x.get("v")
+            else:
+                for k, v in x.items():
+                    walk(v, path + "/" + str(k))
+        elif isinstance(x, list):
+            for v in x:
+                walk(v, path)
+
+    walk(obj)
+
+    # fallback: keep only workbook cell-like data if parser cannot locate cells
+    if not result:
+        return {"parse_status": "no_cells_found"}
+
+    return result
 
 
 def stable_hash(data):
@@ -37,22 +45,22 @@ def stable_hash(data):
 
 
 def main():
-    data = clean(fetch())
+    raw = fetch()
+    cells = find_cell_data(raw)
 
-    # first successful parse becomes baseline
-    current_hash = stable_hash(data)
+    current_hash = stable_hash(cells)
     old = json.loads(SNAPSHOT.read_text()) if SNAPSHOT.exists() else None
 
     if old is None:
-        SNAPSHOT.write_text(json.dumps({"hash": current_hash, "data": data}, ensure_ascii=False, indent=2))
+        SNAPSHOT.write_text(json.dumps({"hash": current_hash, "cells": cells}, ensure_ascii=False, indent=2))
         print("baseline created")
         return
 
     if old.get("hash") != current_hash:
-        SNAPSHOT.write_text(json.dumps({"hash": current_hash, "data": data}, ensure_ascii=False, indent=2))
-        print("document changed")
+        SNAPSHOT.write_text(json.dumps({"hash": current_hash, "cells": cells}, ensure_ascii=False, indent=2))
+        print("cell content changed")
     else:
-        print("no change")
+        print("no cell change")
 
 
 if __name__ == "__main__":
