@@ -5,6 +5,7 @@ from pathlib import Path
 
 URL = "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"
 SNAPSHOT = Path("snapshot.json")
+FLAG = Path("document_changed.flag")
 
 
 def fetch():
@@ -35,6 +36,7 @@ def make_hash(data):
 
 
 def main():
+    FLAG.unlink(missing_ok=True)
     payload = find_sheet_payload(fetch())
     if not payload:
         print("no payload")
@@ -48,6 +50,7 @@ def main():
         print("baseline created")
     elif old.get("hash") != h:
         SNAPSHOT.write_text(json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2))
+        FLAG.write_text("document changed")
         print("document changed")
     else:
         print("no change")
