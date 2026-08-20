@@ -37,6 +37,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add snapshot.json document_changed.flag
+          git add snapshot.json
+          if [ -f document_changed.flag ]; then git add document_changed.flag; fi
           git diff --cached --quiet || git commit -m "update document snapshot"
           git push
