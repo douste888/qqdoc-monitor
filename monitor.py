@@ -5,7 +5,7 @@ from pathlib import Path
 
 DOCS = [
     {
-        "name": "腾讯文档",
+        "name": "现货统计",
         "type": "json",
         "url": "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"
     },
