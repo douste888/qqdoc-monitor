@@ -1,0 +1,4 @@
+document_changed.flag
+monitor-result.json
+__pycache__/
+*.pyc
