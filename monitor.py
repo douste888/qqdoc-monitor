@@ -22,6 +22,7 @@ def fetch_doc(doc):
 
 def extract_stable(data):
     found = {}
+
     def walk(x):
         if isinstance(x, dict):
             for k, v in x.items():
@@ -32,9 +33,9 @@ def extract_stable(data):
         elif isinstance(x, list):
             for v in x:
                 walk(v)
+
     walk(data)
-    text = json.dumps(found, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha256(text.encode()).hexdigest()
+    return found
 
 
 def main():
@@ -50,7 +51,7 @@ def main():
             if doc["type"] == "json":
                 payload[doc["name"]] = extract_stable(data)
             else:
-                payload[doc["name"]] = hashlib.sha256(data.encode()).hexdigest()
+                payload[doc["name"]] = data
             fetched.add(doc["name"])
         except Exception as e:
             print("skip", doc["name"], e)
