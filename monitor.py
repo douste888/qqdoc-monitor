@@ -17,44 +17,24 @@ def fetch_doc(doc):
     req = urllib.request.Request(doc["url"], headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=20) as r:
         raw = r.read()
-    if doc["type"] == "json":
-        return json.loads(raw.decode("utf-8"))
-    return raw.decode("utf-8", errors="ignore")
+    return json.loads(raw.decode("utf-8")) if doc["type"] == "json" else raw.decode("utf-8", errors="ignore")
 
 
-def clean_json(x):
-    """只保留稳定内容，过滤网页动态字段。"""
-    ignore = {
-        "updated_at", "update_time", "timestamp", "token", "version",
-        "request_id", "server_time", "create_time"
-    }
-    if isinstance(x, dict):
-        return {
-            k: clean_json(v)
-            for k, v in x.items()
-            if k.lower() not in ignore
-        }
-    if isinstance(x, list):
-        return [clean_json(v) for v in x]
-    return x
-
-
-def find_sheet_payload(data):
+def extract_stable(data):
     found = {}
-
-    def walk(x, path=""):
+    def walk(x):
         if isinstance(x, dict):
             for k, v in x.items():
-                p = path + "/" + k
                 if k in ("workbook", "related_sheet"):
-                    found[p] = clean_json(v)
-                walk(v, p)
+                    found[k] = v
+                else:
+                    walk(v)
         elif isinstance(x, list):
-            for i, v in enumerate(x):
-                walk(v, f"{path}/{i}")
-
+            for v in x:
+                walk(v)
     walk(data)
-    return found
+    text = json.dumps(found, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def main():
@@ -62,21 +42,22 @@ def main():
     old = json.loads(SNAPSHOT.read_text()) if SNAPSHOT.exists() else None
     old_payload = old.get("payload", {}) if old else {}
     payload = {}
-    fetched_names = set()
+    fetched = set()
 
     for doc in DOCS:
         try:
             data = fetch_doc(doc)
             if doc["type"] == "json":
-                data = find_sheet_payload(data)
-            payload[doc["name"]] = data
-            fetched_names.add(doc["name"])
+                payload[doc["name"]] = extract_stable(data)
+            else:
+                payload[doc["name"]] = hashlib.sha256(data.encode()).hexdigest()
+            fetched.add(doc["name"])
         except Exception as e:
             print("skip", doc["name"], e)
             if doc["name"] in old_payload:
                 payload[doc["name"]] = old_payload[doc["name"]]
 
-    if not fetched_names:
+    if not fetched:
         raise RuntimeError("all documents unavailable")
 
     if old is None:
@@ -84,11 +65,7 @@ def main():
         print("baseline created")
         return
 
-    changed = []
-    for name in fetched_names:
-        if old_payload.get(name) != payload.get(name):
-            changed.append(name)
-
+    changed = [n for n in fetched if old_payload.get(n) != payload.get(n)]
     SNAPSHOT.write_text(json.dumps({"payload": payload}, ensure_ascii=False, indent=2))
 
     if changed:
