@@ -1,6 +1,7 @@
 import json
 import urllib.request
 import hashlib
+import re
 from pathlib import Path
 
 DOCS = [
@@ -16,32 +17,23 @@ FLAG = Path("document_changed.flag")
 def fetch_doc(doc):
     req = urllib.request.Request(doc["url"], headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=20) as r:
-        raw = r.read()
-    return raw.decode("utf-8", errors="ignore")
+        return r.read().decode("utf-8", errors="ignore")
 
 
-def clean_content(text):
-    # 去除明显动态字段，避免页面刷新导致误报警
-    remove_keys = [
-        "timestamp",
-        "updateTime",
-        "serverTime",
-    ]
-    for key in remove_keys:
-        text = text.replace(key, "")
+def clean_text(text):
+    # remove scripts/styles and common dynamic values
+    text = re.sub(r"<script[\s\S]*?</script>", "", text, flags=re.I)
+    text = re.sub(r"<style[\s\S]*?</style>", "", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\\u[0-9a-fA-F]{4}", "", text)
+    for key in ["timestamp", "updateTime", "serverTime", "requestId", "traceId"]:
+        text = re.sub(key + r"[^,}\s]*", "", text, flags=re.I)
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
 def make_hash(text):
-    text = clean_content(text)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def normalize(doc, data):
-    return {
-        "hash": make_hash(data),
-        "length": len(data),
-    }
+    return hashlib.sha256(clean_text(text).encode("utf-8")).hexdigest()
 
 
 def main():
@@ -51,31 +43,32 @@ def main():
     old_payload = old.get("payload", {}) if old else {}
 
     payload = {}
-    fetched = set()
+    fetched = []
 
     for doc in DOCS:
         try:
-            payload[doc["name"]] = normalize(doc, fetch_doc(doc))
-            fetched.add(doc["name"])
+            raw = fetch_doc(doc)
+            payload[doc["name"]] = {
+                "hash": make_hash(raw),
+                "length": len(clean_text(raw))
+            }
+            fetched.append(doc["name"])
         except Exception as e:
             print("skip", doc["name"], e)
-            if doc["name"] in old_payload:
-                payload[doc["name"]] = old_payload[doc["name"]]
 
     if not fetched:
         raise RuntimeError("all documents unavailable")
 
     if old is None:
         SNAPSHOT.write_text(json.dumps({"payload": payload}, ensure_ascii=False, indent=2), "utf-8")
-        print("baseline created")
         return
 
-    changed = [name for name in fetched if old_payload.get(name) != payload.get(name)]
+    changed = [x for x in fetched if old_payload.get(x) != payload.get(x)]
 
     SNAPSHOT.write_text(json.dumps({"payload": payload}, ensure_ascii=False, indent=2), "utf-8")
 
     if changed:
-        FLAG.write_text("\n".join(sorted(changed)), "utf-8")
+        FLAG.write_text("\n".join(changed), "utf-8")
         print("changed", changed)
     else:
         print("no change")
