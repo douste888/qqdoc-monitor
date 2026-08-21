@@ -1,16 +1,16 @@
 {
   "payload": {
     "现货统计": {
-      "hash": "aeb121e739e4df1c653972d117ffbe8fed1fc740d0a3f966e8f597eaf6aaed74",
-      "length": 12072
+      "hash": "6caac94a93f74dd854ba203f1d9d0c57731d3b33a98bdd6e3423241f31507012",
+      "length": 11985
     },
     "懒懒单": {
-      "hash": "a23674704179ed3f5e1f95400fc2fdc8694b9b65a0ffdfebfa39692b38278ddf",
-      "length": 23567
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "length": 0
     },
     "短线统计": {
-      "hash": "84fae8bafcbfab41a02a162937aa75ee6e55564d67b4d91627a3eefb11107092",
-      "length": 10902
+      "hash": "480196ed54d0b1c4a18158232638032646c66c7abd207636157096b87e6cd6de",
+      "length": 10815
     }
   }
 }
