@@ -1,7 +1,7 @@
 {
   "payload": {
     "现货统计": {
-      "hash": "f1e85bcdf555177a63b064e3b4e275f611deb73acb9874949eb58e05b8a7dcb9",
+      "hash": "017a8365c44330d8e38120b1f2ca23af9143a3eaba67a053c71da85ddbd8017a",
       "length": 12072
     },
     "懒懒单": {
@@ -9,7 +9,7 @@
       "length": 23567
     },
     "短线统计": {
-      "hash": "0ea52aa7e4e800ff4a454da4d5a35583647dfb235504e69997ec9358e39a183b",
+      "hash": "3f3d9fc7af2a29881883ba5860743f3003c868ab796de1159b83b4b214e85bc1",
       "length": 10902
     }
   }
