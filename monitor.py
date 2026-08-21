@@ -4,21 +4,9 @@ import hashlib
 from pathlib import Path
 
 DOCS = [
-    {
-        "name": "现货统计",
-        "type": "json",
-        "url": "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"
-    },
-    {
-        "name": "懒懒单",
-        "type": "html",
-        "url": "https://www.kdocs.cn/l/caTKn3Dbrl3G"
-    },
-    {
-        "name": "短线统计",
-        "type": "json",
-        "url": "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DUWRMdkpYY1pIT3J5&tab=0r6mhc"
-    }
+    {"name": "现货统计", "type": "json", "url": "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DV1BNQkZiamdJaVVI&tab=5b4psn"},
+    {"name": "懒懒单", "type": "html", "url": "https://www.kdocs.cn/l/caTKn3Dbrl3G"},
+    {"name": "短线统计", "type": "json", "url": "https://qqdoc-monitor-global-dpz5wry62pcc.edgeone.dev/api/qqdoc?id=DUWRMdkpYY1pIT3J5&tab=0r6mhc"}
 ]
 
 SNAPSHOT = Path("snapshot.json")
@@ -34,6 +22,23 @@ def fetch_doc(doc):
     return raw.decode("utf-8", errors="ignore")
 
 
+def clean_json(x):
+    """只保留稳定内容，过滤网页动态字段。"""
+    ignore = {
+        "updated_at", "update_time", "timestamp", "token", "version",
+        "request_id", "server_time", "create_time"
+    }
+    if isinstance(x, dict):
+        return {
+            k: clean_json(v)
+            for k, v in x.items()
+            if k.lower() not in ignore
+        }
+    if isinstance(x, list):
+        return [clean_json(v) for v in x]
+    return x
+
+
 def find_sheet_payload(data):
     found = {}
 
@@ -42,7 +47,7 @@ def find_sheet_payload(data):
             for k, v in x.items():
                 p = path + "/" + k
                 if k in ("workbook", "related_sheet"):
-                    found[p] = v
+                    found[p] = clean_json(v)
                 walk(v, p)
         elif isinstance(x, list):
             for i, v in enumerate(x):
@@ -52,43 +57,30 @@ def find_sheet_payload(data):
     return found
 
 
-def make_hash(data):
-    return hashlib.sha256(
-        json.dumps(data, ensure_ascii=False, sort_keys=True).encode()
-    ).hexdigest()
-
-
 def main():
     FLAG.unlink(missing_ok=True)
-
     old = json.loads(SNAPSHOT.read_text()) if SNAPSHOT.exists() else None
     old_payload = old.get("payload", {}) if old else {}
     payload = {}
     fetched_names = set()
 
     for doc in DOCS:
-        name = doc["name"]
         try:
             data = fetch_doc(doc)
             if doc["type"] == "json":
                 data = find_sheet_payload(data)
-            payload[name] = data
-            fetched_names.add(name)
+            payload[doc["name"]] = data
+            fetched_names.add(doc["name"])
         except Exception as e:
-            print(f"skip {name}: {e}")
-            # 临时访问失败时沿用上一次缓存，避免把“抓取失败”误判成“文档变化”。
-            if name in old_payload:
-                payload[name] = old_payload[name]
+            print("skip", doc["name"], e)
+            if doc["name"] in old_payload:
+                payload[doc["name"]] = old_payload[doc["name"]]
 
     if not fetched_names:
         raise RuntimeError("all documents unavailable")
 
-    h = make_hash(payload)
-
     if old is None:
-        SNAPSHOT.write_text(
-            json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2)
-        )
+        SNAPSHOT.write_text(json.dumps({"payload": payload}, ensure_ascii=False, indent=2))
         print("baseline created")
         return
 
@@ -97,14 +89,12 @@ def main():
         if old_payload.get(name) != payload.get(name):
             changed.append(name)
 
+    SNAPSHOT.write_text(json.dumps({"payload": payload}, ensure_ascii=False, indent=2))
+
     if changed:
-        SNAPSHOT.write_text(
-            json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2)
-        )
         FLAG.write_text("\n".join(sorted(changed)))
         print("document changed:", changed)
     else:
-        # 即使本次有文档抓取失败，也不改快照、不报警。
         print("no change")
 
 
