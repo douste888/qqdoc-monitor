@@ -1,9 +1,14 @@
-name: qqdoc monitor
+name: document monitor
 
 on:
+  pull_request:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: document-monitor
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -14,30 +19,55 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Run monitor
-        run: python3 monitor.py
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Monitor documents
+        id: monitor
+        env:
+          KDOCS_EXPORT_URL: ${{ secrets.KDOCS_EXPORT_URL }}
+          KDOCS_COOKIE: ${{ secrets.KDOCS_COOKIE }}
+        run: python monitor.py
+
+      - name: Add run summary
+        if: always()
+        run: |
+          echo '## Document monitor' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f monitor-result.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat monitor-result.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Monitor did not produce a result.' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Create notification issue
-        if: hashFiles('document_changed.flag') != ''
-        uses: actions/github-script@v7
+        if: github.event_name != 'pull_request' && steps.monitor.outputs.has_changes == 'true'
+        uses: actions/github-script@v8
+        env:
+          CHANGED_DOCUMENTS: ${{ steps.monitor.outputs.changed }}
         with:
           script: |
-            const fs = require('fs');
-            const changed = fs.readFileSync('document_changed.flag', 'utf8').trim();
-            github.rest.issues.create({
+            const changed = process.env.CHANGED_DOCUMENTS.trim();
+            await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `【${changed}】更新提醒`,
+              title: `【${changed.replace(/\n/g, '、')}】更新提醒`,
               body: `检测到以下文档发生变化：\n\n${changed}\n\n请及时查看。`
-            })
+            });
 
-      - name: Save snapshot and flag
+      - name: Save verified snapshot
+        if: github.event_name != 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add snapshot.json
-          if [ -f document_changed.flag ]; then git add document_changed.flag; fi
-          git diff --cached --quiet || git commit -m "update document snapshot"
+          git add -- snapshot.json
+          git diff --cached --quiet || git commit -m "update verified document snapshot"
           git push
