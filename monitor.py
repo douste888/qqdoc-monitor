@@ -36,6 +36,7 @@ def fetch_doc(doc):
 
 def find_sheet_payload(data):
     found = {}
+
     def walk(x, path=""):
         if isinstance(x, dict):
             for k, v in x.items():
@@ -46,46 +47,64 @@ def find_sheet_payload(data):
         elif isinstance(x, list):
             for i, v in enumerate(x):
                 walk(v, f"{path}/{i}")
+
     walk(data)
     return found
 
 
 def make_hash(data):
-    return hashlib.sha256(json.dumps(data, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(data, ensure_ascii=False, sort_keys=True).encode()
+    ).hexdigest()
 
 
 def main():
     FLAG.unlink(missing_ok=True)
+
+    old = json.loads(SNAPSHOT.read_text()) if SNAPSHOT.exists() else None
+    old_payload = old.get("payload", {}) if old else {}
     payload = {}
+    fetched_names = set()
 
     for doc in DOCS:
+        name = doc["name"]
         try:
             data = fetch_doc(doc)
             if doc["type"] == "json":
                 data = find_sheet_payload(data)
-            payload[doc["name"]] = data
+            payload[name] = data
+            fetched_names.add(name)
         except Exception as e:
-            print(f"skip {doc['name']}: {e}")
+            print(f"skip {name}: {e}")
+            # 临时访问失败时沿用上一次缓存，避免把“抓取失败”误判成“文档变化”。
+            if name in old_payload:
+                payload[name] = old_payload[name]
 
-    if not payload:
+    if not fetched_names:
         raise RuntimeError("all documents unavailable")
 
     h = make_hash(payload)
-    old = json.loads(SNAPSHOT.read_text()) if SNAPSHOT.exists() else None
 
     if old is None:
-        SNAPSHOT.write_text(json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2))
+        SNAPSHOT.write_text(
+            json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2)
+        )
         print("baseline created")
-    elif old.get("hash") != h:
-        changed = []
-        old_payload = old.get("payload", {})
-        for name, data in payload.items():
-            if old_payload.get(name) != data:
-                changed.append(name)
-        SNAPSHOT.write_text(json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2))
-        FLAG.write_text("\n".join(changed) if changed else "文档")
+        return
+
+    changed = []
+    for name in fetched_names:
+        if old_payload.get(name) != payload.get(name):
+            changed.append(name)
+
+    if changed:
+        SNAPSHOT.write_text(
+            json.dumps({"hash": h, "payload": payload}, ensure_ascii=False, indent=2)
+        )
+        FLAG.write_text("\n".join(sorted(changed)))
         print("document changed:", changed)
     else:
+        # 即使本次有文档抓取失败，也不改快照、不报警。
         print("no change")
 
 
