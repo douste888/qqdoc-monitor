@@ -1,9 +1,9 @@
 {
   "documents": {
     "现货统计": {
-      "content_bytes": 9130,
+      "content_bytes": 9111,
       "extractor": "tencent-sheet-v2",
-      "fingerprint": "11e3f4b65b894224b2bde48fb7374c1fc1e57d46fcc8f16009ceaca505048e2c"
+      "fingerprint": "4ef573478ede74c131efcbcef1915aacd1a1739ceaca50820908466e73bfc322"
     },
     "短线统计": {
       "content_bytes": 8314,
