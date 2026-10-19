@@ -6,9 +6,9 @@
       "fingerprint": "161708e37908ebc77e0f7924bf9c384168885683b516ec4b15b61b07566eaccc"
     },
     "短线统计": {
-      "content_bytes": 9230,
+      "content_bytes": 9274,
       "extractor": "tencent-sheet-v2",
-      "fingerprint": "2ec1d5764bda31e1ef37a3aa743df626aabf8733616bf845c9e5749d3315245d"
+      "fingerprint": "7d17f7581003ab8d93cc6b32aaf343778a3722c218722460cb195f921611466d"
     }
   },
   "version": 2
